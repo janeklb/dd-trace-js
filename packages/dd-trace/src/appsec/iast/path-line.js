@@ -39,7 +39,7 @@ function getFirstNonDDPathAndLineFromCallsites (callsites) {
     for (let i = 0; i < callsites.length; i++) {
       const callsite = callsites[i]
       const path = callsite.getFileName()
-      if (!isExcluded(callsite) && path.indexOf(pathLine.ddBasePath) === -1) {
+      if (path && !isExcluded(callsite) && path.indexOf(pathLine.ddBasePath) === -1) {
         return getSourcePathAndLineFromSourceMaps(path, callsite.getLineNumber(), callsite.getColumnNumber())
       }
     }
