@@ -54,12 +54,13 @@ function remapify (input, mappings) {
   return output
 }
 
-function propagationStyle(option, envVar, defaultValue) {
-  let result = coalesce(option, envVar, defaultValue)
-  if (!Array.isArray(result)) {
-    result = result.split(',')
-  }
-  return result.filter(v => v !== '')
+function propagationStyle (option, envVar, defaultValue) {
+  const result = coalesce(option, envVar, defaultValue)
+  if (Array.isArray(result)) return result
+
+  return result.split(',')
+    .filter(v => v !== '')
+    .map(v => v.trim())
 }
 
 class Config {
