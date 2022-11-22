@@ -303,8 +303,8 @@ describe('Config', () => {
       plugins: false,
       logLevel: logLevel,
       tracePropagationStyle: {
-        inject: 'datadog',
-        extract: 'datadog'
+        inject: ['datadog'],
+        extract: ['datadog']
       },
       experimental: {
         b3: true,
@@ -409,7 +409,7 @@ describe('Config', () => {
 
   it('should initialize from the options with simplified trace propagation style', () => {
     const config = new Config({
-      tracePropagationStyle: 'datadog'
+      tracePropagationStyle: ['datadog']
     })
 
     expect(config).to.have.nested.deep.property('tracePropagationStyle.inject', ['datadog'])
@@ -503,8 +503,8 @@ describe('Config', () => {
         foo: 'foo'
       },
       tracePropagationStyle: {
-        inject: '',
-        extract: ''
+        inject: [],
+        extract: []
       },
       experimental: {
         b3: false,
