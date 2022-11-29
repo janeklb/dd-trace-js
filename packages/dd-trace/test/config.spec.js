@@ -74,8 +74,8 @@ describe('Config', () => {
     expect(config).to.have.property('reportHostname', false)
     expect(config).to.have.property('scope', undefined)
     expect(config).to.have.property('logLevel', 'debug')
-    expect(config).to.have.nested.deep.property('tracePropagationStyle.inject', ['datadog'])
-    expect(config).to.have.nested.deep.property('tracePropagationStyle.extract', ['datadog'])
+    expect(config).to.have.nested.deep.property('tracePropagationStyle.inject', ['tracecontext', 'datadog'])
+    expect(config).to.have.nested.deep.property('tracePropagationStyle.extract', ['tracecontext', 'datadog'])
     expect(config).to.have.nested.property('experimental.runtimeId', false)
     expect(config).to.have.nested.property('experimental.exporter', undefined)
     expect(config).to.have.nested.property('experimental.enableGetRumData', false)
@@ -405,15 +405,6 @@ describe('Config', () => {
     expect(config).to.have.property('flushInterval', 5000)
     expect(config).to.have.property('flushMinSpans', 500)
     expect(config).to.have.property('plugins', false)
-  })
-
-  it('should initialize from the options with simplified trace propagation style', () => {
-    const config = new Config({
-      tracePropagationStyle: ['datadog']
-    })
-
-    expect(config).to.have.nested.deep.property('tracePropagationStyle.inject', ['datadog'])
-    expect(config).to.have.nested.deep.property('tracePropagationStyle.extract', ['datadog'])
   })
 
   it('should warn if mixing shared and extract propagation style env vars', () => {

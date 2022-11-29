@@ -3,8 +3,11 @@
 const Config = require('../../../src/config')
 const id = require('../../../src/id')
 const SpanContext = require('../../../src/opentracing/span_context')
+const TraceState = require('../../../src/opentracing/propagation/tracestate')
 
 const { AUTO_KEEP, AUTO_REJECT, USER_KEEP } = require('../../../../../ext/priority')
+const { SAMPLING_MECHANISM_MANUAL } = require('../../../src/constants')
+const { expect } = require('chai')
 
 describe('TextMapPropagator', () => {
   let TextMapPropagator
@@ -212,15 +215,24 @@ describe('TextMapPropagator', () => {
         traceId: id('1111aaaa2222bbbb3333cccc4444dddd', 16),
         spanId: id('5555eeee6666ffff', 16),
         sampling: {
-          priority: USER_KEEP
-        }
+          priority: USER_KEEP,
+          mechanism: SAMPLING_MECHANISM_MANUAL
+        },
+        tracestate: TraceState.fromString('other=bleh,dd=s:2;o:foo_bar_;t.dm:-4')
       })
+      // Include invalid characters to verify underscore conversion
+      spanContext._trace.origin = 'foo,bar='
+      spanContext._trace.tags['_dd.p.foo bar,baz='] = 'abc~!@#$%^&*()_+`-='
 
       config.tracePropagationStyle.inject = ['tracecontext']
 
       propagator.inject(spanContext, carrier)
 
       expect(carrier).to.have.property('traceparent', '01-1111aaaa2222bbbb3333cccc4444dddd-5555eeee6666ffff-01')
+      expect(carrier).to.have.property(
+        'tracestate',
+        'dd=t.foo_bar_baz_:abc_!@#$%^&*()_+`-~;s:2;o:foo_bar_;t.dm:-4,other=bleh'
+      )
     })
 
     it('should skip injection of B3 headers without the feature flag', () => {
@@ -598,13 +610,19 @@ describe('TextMapPropagator', () => {
 
       it('should extract the header', () => {
         textMap['traceparent'] = '00-1111aaaa2222bbbb3333cccc4444dddd-5555eeee6666ffff-01'
+        textMap['tracestate'] = 'other=bleh,dd=t.foo_bar_baz_:abc_!@#$%^&*()_+`-~;s:2;o:foo;t.dm:-4'
         config.tracePropagationStyle.extract = ['tracecontext']
 
         const carrier = textMap
         const spanContext = propagator.extract(carrier)
         expect(spanContext._traceId.toString(16)).to.equal('1111aaaa2222bbbb3333cccc4444dddd')
         expect(spanContext._spanId.toString(16)).to.equal('5555eeee6666ffff')
-        expect(spanContext._sampling.priority).to.equal(AUTO_KEEP)
+        expect(spanContext._sampling.priority).to.equal(USER_KEEP)
+        expect(spanContext._trace.origin).to.equal('foo')
+        expect(spanContext._trace.tags).to.have.property(
+          '_dd.p.foo_bar_baz_',
+          'abc_!@#$%^&*()_+`-='
+        )
       })
     })
   })

@@ -55,15 +55,26 @@ function remapify (input, mappings) {
 }
 
 function propagationStyle (key, option, defaultValue) {
-  const opt = typeof option === 'object' ? option[key] : option
-  if (typeof opt !== 'undefined') return opt
+  // Extract by key if in object-form value
+  if (typeof option === 'object' && !Array.isArray(option)) {
+    option = option[key]
+  }
 
+  // Should be an array at this point
+  if (Array.isArray(option)) return option.map(v => v.toLowerCase())
+
+  // If it's not an array but not undefined there's something wrong with the input
+  if (typeof option !== 'undefined') {
+    log.warn('Unexpected input for config.tracePropagationStyle')
+  }
+
+  // Otherwise, fallback to env var parsing
   const envKey = `DD_TRACE_PROPAGATION_STYLE_${key.toUpperCase()}`
   const envVar = coalesce(process.env[envKey], process.env.DD_TRACE_PROPAGATION_STYLE)
   if (typeof envVar !== 'undefined') {
     return envVar.split(',')
       .filter(v => v !== '')
-      .map(v => v.trim())
+      .map(v => v.trim().toLowerCase())
   }
 
   return defaultValue
@@ -205,18 +216,7 @@ class Config {
       process.env.DD_TRACE_EXPERIMENTAL_B3_ENABLED,
       false
     )
-    const DD_TRACE_TRACEPARENT_ENABLED = coalesce(
-      options.experimental && options.experimental.traceparent,
-      process.env.DD_TRACE_EXPERIMENTAL_TRACEPARENT_ENABLED,
-      false
-    )
-    // TODO: change this to traceparent,datadog
-    // Traceparent should be prioritized over datadog headers, but this is a breaking change until
-    // we support tracestate headers too, otherwise we would lose origin and tags header data.
-    const defaultPropagationStyle = ['datadog']
-    if (isTrue(DD_TRACE_TRACEPARENT_ENABLED)) {
-      defaultPropagationStyle.push('tracecontext')
-    }
+    const defaultPropagationStyle = ['tracecontext', 'datadog']
     if (isTrue(DD_TRACE_B3_ENABLED)) {
       defaultPropagationStyle.push('b3')
       defaultPropagationStyle.push('b3 single header')

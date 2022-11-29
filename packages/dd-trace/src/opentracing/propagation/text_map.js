@@ -4,6 +4,7 @@ const pick = require('lodash.pick')
 const id = require('../../id')
 const DatadogSpanContext = require('../span_context')
 const log = require('../../log')
+const TraceState = require('./tracestate')
 
 const { AUTO_KEEP, AUTO_REJECT, USER_KEEP } = require('../../../../../ext/priority')
 
@@ -31,6 +32,12 @@ const b3Keys = [b3TraceKey, b3SpanKey, b3ParentKey, b3SampledKey, b3FlagsKey, b3
 const logKeys = ddKeys.concat(b3Keys)
 const traceparentExpr = /^(\d{2})-([A-Fa-f0-9]{32})-([A-Fa-f0-9]{16})-(\d{2})$/i
 const traceparentKey = 'traceparent'
+// Origin value in tracestate replaces ',' and '=' with '_"
+const tracestateOriginFilter = /[^\x20-\x2b\x2d-\x3c\x3e-\x7e]/g
+// Tag keys in tracestate replace ' ', ',' and '=' with '_'
+const tracestateTagKeyFilter = /[^\x21-\x2b\x2d-\x3c\x3e-\x7e]/g
+// Tag values in tracestate replace ',', '~' and ';' with '_'
+const tracestateTagValueFilter = /[^\x20-\x2b\x2d-\x3a\x3c-\x7d]/g
 
 class TextMapPropagator {
   constructor (config) {
@@ -120,8 +127,9 @@ class TextMapPropagator {
 
   _injectB3 (spanContext, carrier) {
     const hasB3 = this._hasPropagationStyle('inject', 'b3')
+    const hasB3multi = this._hasPropagationStyle('inject', 'b3multi')
     const hasB3SingleHeader = this._hasPropagationStyle('inject', 'b3 single header')
-    if (!hasB3 && !hasB3SingleHeader) return null
+    if (!(hasB3 || hasB3multi) && !hasB3SingleHeader) return null
 
     carrier[b3TraceKey] = spanContext._traceId.toString(16)
     carrier[b3SpanKey] = spanContext._spanId.toString(16)
@@ -138,7 +146,39 @@ class TextMapPropagator {
 
   _injectTraceparent (spanContext, carrier) {
     if (!this._hasPropagationStyle('inject', 'tracecontext')) return
+
+    const {
+      _sampling: { priority, mechanism },
+      _tracestate: ts,
+      _trace: { origin, tags }
+    } = spanContext
+
     carrier[traceparentKey] = spanContext.toTraceparent()
+
+    ts.forVendor('dd', state => {
+      state.set('s', priority)
+      state.set('t.dm', `-${mechanism}`)
+
+      if (typeof origin === 'string') {
+        state.set('o', origin.replace(tracestateOriginFilter, '_'))
+      }
+
+      for (const key in tags) {
+        if (!tags[key] || !key.startsWith('_dd.p.')) continue
+
+        const tagKey = 't.' + key.slice(6)
+          .replace(tracestateTagKeyFilter, '_')
+
+        const tagValue = tags[key]
+          .replace(tracestateTagValueFilter, '_')
+          // TODO: Make sure step 3c of tracestate encoding spec is correct.
+          .replace(/[\x3d]/g, '~')
+
+        state.set(tagKey, tagValue)
+      }
+    })
+
+    carrier.tracestate = ts.toString()
   }
 
   _hasPropagationStyle (mode, name) {
@@ -238,12 +278,47 @@ class TextMapPropagator {
     if (!headerValue) {
       return null
     }
-    const matches = headerValue.match(traceparentExpr)
+    const matches = headerValue.trim().match(traceparentExpr)
     if (matches.length) {
+      const tracestate = TraceState.fromString(carrier.tracestate)
       const spanContext = new DatadogSpanContext({
         traceId: id(matches[2], 16),
         spanId: id(matches[3], 16),
-        sampling: { priority: matches[4] === '01' ? 1 : 0 }
+        sampling: { priority: matches[4] === '01' ? 1 : 0 },
+        tracestate
+      })
+
+      tracestate.forVendor('dd', state => {
+        const priority = state.get('s')
+        if (priority) {
+          spanContext._sampling.priority = Number(priority)
+        }
+        const mechanism = state.get('t.dm')
+        if (mechanism) {
+          spanContext._sampling.mechanism = Number(mechanism.slice(1))
+        }
+        const origin = state.get('o')
+        if (origin) {
+          spanContext._trace.origin = origin
+        }
+
+        for (const [key, value] of state.entries()) {
+          switch (key) {
+            case 's':
+              spanContext._sampling.priority = Number(value)
+              break
+            case 'o':
+              spanContext._trace.origin = origin
+              break
+            case 't.dm':
+              spanContext._sampling.mechanism = Number(mechanism.slice(1))
+              break
+            default:
+              if (!key.startsWith('t.')) continue
+              spanContext._trace.tags[`_dd.p.${key.slice(2)}`] = value
+                .replace(/[\x7e]/gm, '=')
+          }
+        }
       })
 
       this._extractBaggageItems(carrier, spanContext)
