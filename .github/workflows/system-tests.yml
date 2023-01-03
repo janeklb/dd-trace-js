@@ -55,11 +55,14 @@ jobs:
     env:
       CLIENTS_ENABLED: nodejs
       NODEJS_DDTRACE_MODULE: datadog/dd-trace-js#${{ github.sha }}
+      OVERRIDE_SKIPS: test_headers_b3_extract_valid,test_headers_b3_extract_invalid,test_headers_b3_inject_valid,test_headers_b3multi_propagate_valid,test_headers_b3multi_propagate_invalid,test_headers_b3multi_extract_valid,test_headers_b3multi_extract_invalid,test_headers_b3multi_inject_valid,test_headers_b3multi_propagate_valid,test_headers_b3multi_propagate_invalid,test_headers_datadog_extract_valid,test_headers_datadog_extract_invalid,test_headers_datadog_inject_valid,test_headers_datadog_propagate_valid,test_headers_datadog_propagate_invalid,test_headers_none_extract
     steps:
       - name: Checkout system tests
         uses: actions/checkout@v3
         with:
           repository: 'DataDog/system-tests'
+          # TODO: Delete when https://github.com/DataDog/system-tests/pull/691 lands
+          ref: zach/headers-parametric-w3c
       - uses: actions/setup-python@v4
         with:
           python-version: '3.9'
