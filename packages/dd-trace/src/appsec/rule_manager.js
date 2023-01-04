@@ -3,16 +3,44 @@
 const callbacks = require('./callbacks')
 const Gateway = require('./gateway/engine')
 
-const appliedCallbacks = new Map()
+let appliedCallback
 const appliedAsmData = new Map()
+let defaultRules
+let asmDDRules
+let config
 
-function applyRules (rules, config) {
-  if (appliedCallbacks.has(rules)) return
+function applyRules (rules, _config) {
+  if (appliedCallback) return
+  defaultRules = rules
+  config = _config
+  appliedCallback = initDDWAF(rules)
+}
 
-  // for now there is only WAF
-  const callback = new callbacks.DDWAF(rules, config)
+function initDDWAF (rules) {
+  return new callbacks.DDWAF(rules, config)
+}
 
-  appliedCallbacks.set(rules, callback)
+function updateAsmDDRules (action, asmRules) {
+  if (action === 'unapply') {
+    asmDDRules = undefined
+  } else {
+    asmDDRules = asmRules
+  }
+  updateAppliedRules()
+  updateAppliedRuleData()
+}
+
+function updateAppliedRules () {
+  const rules = asmDDRules || defaultRules
+  try {
+    const deprecatedCallback = appliedCallback
+    appliedCallback = initDDWAF(rules)
+    if (deprecatedCallback) {
+      deprecatedCallback.clear()
+    }
+  } catch (e) {
+    // nothing to do
+  }
 }
 
 function updateAsmData (action, asmData, asmDataId) {
@@ -22,10 +50,12 @@ function updateAsmData (action, asmData, asmDataId) {
     appliedAsmData.set(asmDataId, asmData)
   }
 
+  updateAppliedRuleData()
+}
+
+function updateAppliedRuleData () {
   const mergedRuleData = mergeRuleData(appliedAsmData.values())
-  for (const callback of appliedCallbacks.values()) {
-    callback.updateRuleData(mergedRuleData)
-  }
+  appliedCallback && appliedCallback.updateRuleData(mergedRuleData)
 }
 
 function mergeRuleData (asmDataValues) {
@@ -72,10 +102,9 @@ function copyRulesData (rulesData) {
 function clearAllRules () {
   Gateway.manager.clear()
 
-  for (const [key, callback] of appliedCallbacks) {
-    callback.clear()
-
-    appliedCallbacks.delete(key)
+  if (appliedCallback) {
+    appliedCallback.clear()
+    appliedCallback = undefined
   }
   appliedAsmData.clear()
 }
@@ -83,5 +112,6 @@ function clearAllRules () {
 module.exports = {
   applyRules,
   clearAllRules,
-  updateAsmData
+  updateAsmData,
+  updateAsmDDRules
 }

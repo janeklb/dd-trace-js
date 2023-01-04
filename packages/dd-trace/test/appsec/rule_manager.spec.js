@@ -1,15 +1,21 @@
 'use strict'
 
-const { applyRules, clearAllRules, updateAsmData } = require('../../src/appsec/rule_manager')
+const { applyRules, clearAllRules, updateAsmData, updateAsmDDRules } = require('../../src/appsec/rule_manager')
 const callbacks = require('../../src/appsec/callbacks')
 const Gateway = require('../../src/appsec/gateway/engine')
 
-const rules = [{ a: 'thatsarule' }, { b: 'thatsanotherone' }]
+const rules = {
+  rules: [
+    { a: 'thatsarule' },
+    { b: 'thatsanotherone' }
+  ]
+}
 
 describe('AppSec Rule Manager', () => {
   let FakeDDWAF
 
   beforeEach(() => {
+    clearAllRules()
     FakeDDWAF = sinon.spy()
 
     FakeDDWAF.prototype.clear = sinon.spy()
@@ -332,6 +338,48 @@ describe('AppSec Rule Manager', () => {
 
       expect(FakeDDWAF.prototype.updateRuleData).to.have.been.callCount(4)
       expect(FakeDDWAF.prototype.updateRuleData.lastCall).calledWithExactly(expectedMergedRulesData)
+    })
+  })
+
+  describe('updateAsmDDRules', () => {
+    const config = {}
+    beforeEach(() => {
+      applyRules(rules, config)
+      FakeDDWAF.resetHistory()
+    })
+
+    it('should create new callback with new rules on apply', () => {
+      const testRules = {
+        version: '2.1',
+        rules: [
+          {
+            id: 'test-id-1',
+            name: 'Test name 1'
+          }
+        ]
+      }
+      updateAsmDDRules('apply', testRules)
+      expect(FakeDDWAF).to.have.been.calledOnce
+      expect(FakeDDWAF.prototype.clear).to.have.been.calledOnce
+      expect(FakeDDWAF.firstCall.returnValue).to.not.be.equal(FakeDDWAF.prototype.clear.firstCall.thisValue)
+      expect(FakeDDWAF.firstCall.args[0]).to.deep.equal(testRules)
+    })
+
+    it('should create new callback with default rules on unapply', () => {
+      const testRules = {
+        version: '2.1',
+        rules: [
+          {
+            id: 'test-id-1',
+            name: 'Test name 1'
+          }
+        ]
+      }
+      updateAsmDDRules('unapply', testRules)
+      expect(FakeDDWAF).to.have.been.calledOnce
+      expect(FakeDDWAF.prototype.clear).to.have.been.calledOnce
+      expect(FakeDDWAF.firstCall.returnValue).to.not.be.equal(FakeDDWAF.prototype.clear.firstCall.thisValue)
+      expect(FakeDDWAF.firstCall.args[0]).to.deep.equal(rules)
     })
   })
 })

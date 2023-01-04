@@ -45,12 +45,31 @@ function disableAsmData () {
   }
 }
 
+function enableAsmRules (appsecConfig) {
+  if (rc && appsecConfig && appsecConfig.rules === undefined) {
+    rc.updateCapabilities(RemoteConfigCapabilities.ASM_DD_RULES, true)
+    rc.on('ASM_DD', _asmDDListener)
+  }
+}
+
+function disableAsmRules () {
+  if (rc) {
+    rc.off('ASM_DD', _asmDDListener)
+  }
+}
+
 function _asmDataListener (action, ruleData, ruleId) {
   RuleManager.updateAsmData(action, ruleData, ruleId)
+}
+
+function _asmDDListener (action, ruleData) {
+  RuleManager.updateAsmDDRules(action, ruleData)
 }
 
 module.exports = {
   enable,
   enableAsmData,
-  disableAsmData
+  enableAsmRules,
+  disableAsmData,
+  disableAsmRules
 }
