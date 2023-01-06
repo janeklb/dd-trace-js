@@ -201,7 +201,7 @@ class TextMapPropagator {
 
   _extractSpanContext (carrier) {
     for (const extractor of this._config.tracePropagationStyle.extract) {
-      let spanContext
+      let spanContext = null
       switch (extractor) {
         case 'datadog':
           spanContext = this._extractDatadogContext(carrier)
