@@ -38,6 +38,7 @@ const tracestateOriginFilter = /[^\x20-\x2b\x2d-\x3c\x3e-\x7e]/g
 const tracestateTagKeyFilter = /[^\x21-\x2b\x2d-\x3c\x3e-\x7e]/g
 // Tag values in tracestate replace ',', '~' and ';' with '_'
 const tracestateTagValueFilter = /[^\x20-\x2b\x2d-\x3a\x3c-\x7d]/g
+const invalidSegment = /^0+$/
 
 class TextMapPropagator {
   constructor (config) {
@@ -256,6 +257,7 @@ class TextMapPropagator {
     const debug = b3[b3FlagsKey] === '1'
     const priority = this._getPriority(b3[b3SampledKey], debug)
     const spanContext = this._extractGenericContext(b3, b3TraceKey, b3SpanKey, 16)
+    if (!spanContext) return null
 
     if (priority !== undefined) {
       if (!spanContext) {
@@ -295,6 +297,9 @@ class TextMapPropagator {
     const matches = headerValue.trim().match(traceparentExpr)
     if (matches.length) {
       const tracestate = TraceState.fromString(carrier.tracestate)
+      if (invalidSegment.test(matches[2])) return null
+      if (invalidSegment.test(matches[3])) return null
+
       const spanContext = new DatadogSpanContext({
         traceId: id(matches[2], 16),
         spanId: id(matches[3], 16),
@@ -343,6 +348,9 @@ class TextMapPropagator {
 
   _extractGenericContext (carrier, traceKey, spanKey, radix) {
     if (carrier[traceKey] && carrier[spanKey]) {
+      if (invalidSegment.test(carrier[traceKey])) return null
+      if (invalidSegment.test(carrier[spanKey])) return null
+
       return new DatadogSpanContext({
         traceId: id(carrier[traceKey], radix),
         spanId: id(carrier[spanKey], radix)
