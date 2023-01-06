@@ -47,7 +47,8 @@ class TextMapPropagator {
   inject (spanContext, carrier) {
     this._injectBaggageItems(spanContext, carrier)
     this._injectDatadog(spanContext, carrier)
-    this._injectB3(spanContext, carrier)
+    this._injectB3MultipleHeaders(spanContext, carrier)
+    this._injectB3SingleHeader(spanContext, carrier)
     this._injectTraceparent(spanContext, carrier)
 
     log.debug(() => `Inject into carrier: ${JSON.stringify(pick(carrier, logKeys))}.`)
@@ -125,11 +126,10 @@ class TextMapPropagator {
     }
   }
 
-  _injectB3 (spanContext, carrier) {
+  _injectB3MultipleHeaders (spanContext, carrier) {
     const hasB3 = this._hasPropagationStyle('inject', 'b3')
     const hasB3multi = this._hasPropagationStyle('inject', 'b3multi')
-    const hasB3SingleHeader = this._hasPropagationStyle('inject', 'b3 single header')
-    if (!(hasB3 || hasB3multi) && !hasB3SingleHeader) return null
+    if (!(hasB3 || hasB3multi)) return
 
     carrier[b3TraceKey] = spanContext._traceId.toString(16)
     carrier[b3SpanKey] = spanContext._spanId.toString(16)
@@ -141,6 +141,20 @@ class TextMapPropagator {
 
     if (spanContext._parentId) {
       carrier[b3ParentKey] = spanContext._parentId.toString(16)
+    }
+  }
+
+  _injectB3SingleHeader (spanContext, carrier) {
+    const hasB3SingleHeader = this._hasPropagationStyle('inject', 'b3 single header')
+    if (!hasB3SingleHeader) return null
+
+    const traceId = spanContext._traceId.toString(16)
+    const spanId = spanContext._spanId.toString(16)
+    const sampled = spanContext._sampling.priority >= AUTO_KEEP ? '1' : '0'
+
+    carrier[b3HeaderKey] = `${traceId}-${spanId}-${sampled}`
+    if (spanContext._parentId) {
+      carrier[b3HeaderKey] += '-' + spanContext._parentId.toString(16)
     }
   }
 
